@@ -179,7 +179,13 @@ Divide the source file list into 4-5 roughly equal groups. Spawn one Research Ag
 ### Research Agent constraints:
 - Do NOT include verbatim quotes from sources. Paraphrase everything.
 - Do NOT include company names, product names (other than Claude Code/Anthropic), or individual names in summaries.
-- Keep each per-file summary under 300 words. Keep the consolidated summary under 2000 words.
+- Keep each per-file summary proportional to source size: ~500 words per 20KB of source, up to 3000 words for the largest files. Keep the consolidated summary under 5000 words.
+- Per-file summaries MUST include: every named feature/concept, every case study or example with enough detail to reconstruct it, every configuration option or command, and every metric or benchmark. If in doubt, include it — lossy summarization is the biggest risk to book quality.
+- Case studies and real-world examples must be preserved with their full narrative arc, not reduced to single-sentence mentions. These are the most valuable content for the target audience.
+
+### Research Agent quality gate:
+- After producing all summaries, the Research Agent must self-check: "For every heading, subheading, and distinct section in each source file, did I capture it in my summary?" If not, go back and add it.
+- The summary of a 100KB+ file should NEVER be under 1000 words. If it is, the summary is too lossy — expand it.
 
 ---
 
@@ -256,7 +262,7 @@ Each writer produces `chapters/NN-<slug>.md` per assigned chapter.
 - **Synthesize, don't summarize.** Do not walk through research summaries one by one. Merge into unified explanations.
 - **Examples must be generic.** If a research summary mentions a specific company's use case, generalize it.
 - **Do not explain basics.** No installation, no "what is an LLM," no basic workflows. Start where the experienced reader's knowledge ends.
-- **Write from research summaries only.** Do NOT read original source files — they will blow the context window.
+- **Write primarily from research summaries.** Use Grep to search specific source files in `working/converted/` when a summary references a case study, example, or feature that needs more detail. Do NOT read entire source files — use targeted searches to pull specific sections. Research summaries are the map; source files are the territory you visit selectively.
 
 Writers process chapters sequentially (Writer-A does ch1, then ch4, then ch7). Paired editor begins reviewing ch1 while Writer-A drafts ch4.
 
@@ -292,6 +298,32 @@ Issues: <specific problems if FAIL>
 ```
 
 Every chapter must PASS all three. Failures return to writer/editor pair. Only failing reviewer(s) re-review after revision.
+
+---
+
+## Step 4.5: Source Coverage Audit (after Review Phase passes)
+
+**This step prevents the single biggest quality risk: source material that never makes it into the book.** Research summaries are lossy by nature. This step catches everything that fell through.
+
+Spawn one Audit Agent per Research Agent group (same file assignments as Step 1). Each Audit Agent:
+
+1. Reads every source file in its assigned group from `working/converted/`
+2. Reads every chapter file from `chapters/`
+3. For EACH distinct concept, feature, case study, example, configuration option, and best practice in the source files, uses Grep to verify it appears **substantively** in at least one chapter (not just a one-sentence mention)
+4. Produces a gap report: `working/audit-gaps-<agent-id>.md` listing every item that is missing or insufficiently covered, organized by chapter, with:
+   - The missing item description
+   - Which source file contains it
+   - Which chapter should cover it
+   - Whether it needs a brief mention, a full section, or a case study narrative
+
+**Gap threshold:** If ANY audit agent reports more than 10 missing items, spawn Fix Agents to add the missing content:
+
+- Divide chapters across Fix Agents (2-3 chapters per agent)
+- Each Fix Agent reads the gap reports, uses Grep to find relevant content in source files, and adds substantive coverage to the appropriate chapters
+- Fix Agents preserve existing content and follow the style guide
+- Each addition must be substantive — full paragraphs with examples, not one-sentence throwaway mentions
+
+After Fix Agents complete, re-run the three Review Agents (Legal, Dedup, Quality) on any modified chapters. Only proceed to Publisher when all chapters pass BOTH the source coverage audit AND the three reviewers.
 
 ---
 
@@ -431,7 +463,7 @@ What changes when AI writes most code. Team restructuring. Writing code vs. spec
         │
         │  (IMMEDIATELY — orchestrator does NOT read converted files)
         │
-        ├── [Research-1] reads converted file group 1, writes summaries
+        ├── [Research-1] reads converted file group 1, writes summaries (proportional to source size)
         ├── [Research-2] reads converted file group 2, writes summaries
         ├── [Research-3] reads converted file group 3, writes summaries
         ├── [Research-4] reads converted file group 4, writes summaries
@@ -440,7 +472,7 @@ What changes when AI writes most code. Team restructuring. Writing code vs. spec
                     ▼ (all research complete)
 [Orchestrator] Reads ONLY consolidated summaries → knowledge_map → dedup_registry → refine chapter_plan → assign writers
         │
-        ├── [Writer-A + Editor-A] chapters 1, 4, 7, 10, ...
+        ├── [Writer-A + Editor-A] chapters 1, 4, 7, 10, ... (writers may Grep source files for detail)
         ├── [Writer-B + Editor-B] chapters 2, 5, 8, 11, ...
         └── [Writer-C + Editor-C] chapters 3, 6, 9, 12, ...
                     │
@@ -449,5 +481,13 @@ What changes when AI writes most code. Team restructuring. Writing code vs. spec
    [Reviewer-Legal] [Reviewer-Dedup] [Reviewer-Quality]
                     │
                     ▼ (all chapters PASS all reviewers)
+        ┌───────────┼───────────┐
+   [Audit-1]  [Audit-2]  [Audit-3]  [Audit-4]  ← reads source files, compares to chapters
+                    │
+                    ▼ (gaps found? → spawn Fix Agents → re-review)
+        ┌───────────┼───────────┐
+   [Fix-A]    [Fix-B]    [Fix-C]   ← adds missing content, re-reviewed by Legal/Dedup/Quality
+                    │
+                    ▼ (all chapters PASS audit + all reviewers)
               [Publisher] → EPUB + quick_reference.md
 ```
